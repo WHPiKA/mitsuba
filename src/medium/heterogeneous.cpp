@@ -663,31 +663,32 @@ public:
     }
 
     void eval(const Ray &ray, MediumSamplingRecord &mRec) const {
-        if (m_method == ESimpsonQuadrature) {
-            Float expVal = math::fastexp(-integrateDensity(ray));
-            Float mintDensity = lookupDensity(ray(ray.mint), ray.d) * m_scale;
-            Float maxtDensity = 0.0f;
-            Spectrum maxtAlbedo(0.0f);
-            Vector orientation(0.0f);
-            if (ray.maxt < std::numeric_limits<Float>::infinity()) {
-                Point p = ray(ray.maxt);
-                maxtDensity = lookupDensity(p, ray.d) * m_scale;
-                maxtAlbedo = m_albedo->lookupSpectrum(p);
-                orientation = m_orientation != NULL
-                             ? m_orientation->lookupVector(p) : Vector(0.0f);
-            }
-            mRec.orientation = orientation;
-            mRec.transmittance = Spectrum(expVal);
-            mRec.pdfFailure = expVal;
-            mRec.pdfSuccess = expVal * maxtDensity;
-            mRec.pdfSuccessRev = expVal * mintDensity;
-            mRec.sigmaS = maxtAlbedo * maxtDensity;
-            mRec.sigmaA = Spectrum(maxtDensity) - mRec.sigmaS;
-            mRec.time = ray.time;
-            mRec.medium = this;
-        } else {
-            Log(EError, "eval(): unsupported integration method!");
-        }
+		if (m_method == ESimpsonQuadrature) {
+			Float expVal = math::fastexp(-integrateDensity(ray));
+			Float mintDensity = lookupDensity(ray(ray.mint), ray.d) * m_scale;
+			Float maxtDensity = 0.0f;
+			Spectrum maxtAlbedo(0.0f);
+			Vector orientation(0.0f);
+			if (ray.maxt < std::numeric_limits<Float>::infinity()) {
+				Point p = ray(ray.maxt);
+				maxtDensity = lookupDensity(p, ray.d) * m_scale;
+				maxtAlbedo = m_albedo->lookupSpectrum(p);
+				orientation = m_orientation != NULL		// Edited
+					? m_orientation->lookupVector(p) : Vector(0.0f);
+			}
+			mRec.orientation = orientation;		// Edited
+			mRec.transmittance = Spectrum(expVal);
+			mRec.pdfFailure = expVal;
+			mRec.pdfSuccess = expVal * maxtDensity;
+			mRec.pdfSuccessRev = expVal * mintDensity;
+			mRec.sigmaS = maxtAlbedo * maxtDensity;
+			mRec.sigmaA = Spectrum(maxtDensity) - mRec.sigmaS;
+			mRec.time = ray.time;
+			mRec.medium = this;
+		}
+		else {
+			Log(EError, "eval(): unsupported integration method!");
+		}
     }
 
     bool isHomogeneous() const {

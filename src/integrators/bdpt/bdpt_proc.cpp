@@ -158,6 +158,11 @@ public:
 
         Spectrum sampleValue(0.0f);
         for (int s = (int) emitterSubpath.vertexCount()-1; s >= 0; --s) {
+			Float emitter_radius = 0;				// Edited
+			Float distance_from_emitter = 0;
+			for (int ss = 0; ss <= s; ++ss)
+				emitterSubpath.vertex(ss)->pathCoherenceProperties(distance_from_emitter, emitter_radius);
+
             /* Determine the range of sensor vertices to be traversed,
                while respecting the specified maximum path length */
             int minT = std::max(2-s, m_config.lightImage ? 0 : 2),
@@ -175,6 +180,10 @@ public:
                     *vsEdge = emitterSubpath.edgeOrNull(s-1),
                     *vtEdge = sensorSubpath.edgeOrNull(t-1);
 
+				Float dist = distance_from_emitter;			// Edited
+				for (int tt = t; tt >= minT; --tt)
+					sensorSubpath.vertex(tt)->pathCoherenceProperties(dist, emitter_radius);
+
                 RestoreMeasureHelper rmh0(vs), rmh1(vt);
 
                 /* Will be set to true if direct sampling was used */
@@ -190,6 +199,13 @@ public:
                 /* Will receive the path weight of the (s, t)-connection */
                 Spectrum value;
 
+				// if (vs->isSurfaceInteraction()) {		// Edited
+				//     bool __break=true;
+				// }
+				// if (vt->isSurfaceInteraction()) {
+				//     bool __break=true;
+				// }
+
                 /* Account for the terms of the measurement contribution
                    function that are coupled to the connection endpoints */
                 if (vs->isEmitterSupernode()) {
@@ -197,9 +213,10 @@ public:
                     if (!vt->cast(scene, PathVertex::EEmitterSample) || vt->isDegenerate())
                         continue;
 
-                    value = radianceWeights[t] *
-                        vs->eval(scene, vsPred, vt, EImportance) *
-                        vt->eval(scene, vtPred, vs, ERadiance);
+					value = radianceWeights[t] *
+						vs->eval(scene, vsPred, vt, EImportance, EArea,		// Edited
+							distance_from_emitter / emitter_radius) *
+						vt->eval(scene, vtPred, vs, ERadiance, EArea, dist / emitter_radius);
                 } else if (vt->isSensorSupernode()) {
                     /* If possible, convert 'vs' into an sensor sample */
                     if (!vs->cast(scene, PathVertex::ESensorSample) || vs->isDegenerate())
@@ -209,9 +226,10 @@ public:
                     if (!vs->getSamplePosition(vsPred, samplePos))
                         continue;
 
-                    value = importanceWeights[s] *
-                        vs->eval(scene, vsPred, vt, EImportance) *
-                        vt->eval(scene, vtPred, vs, ERadiance);
+					value = importanceWeights[s] *
+						vs->eval(scene, vsPred, vt, EImportance, EArea,		// Edited
+							distance_from_emitter / emitter_radius) *
+						vt->eval(scene, vtPred, vs, ERadiance, EArea, dist / emitter_radius);
                 } else if (m_config.sampleDirect && ((t == 1 && s > 1) || (s == 1 && t > 1))) {
                     /* s==1/t==1 path: use a direct sampling strategy if requested */
                     if (s == 1) {
@@ -223,7 +241,7 @@ public:
                         if (value.isZero())
                             continue;
                         vs = &tempSample; vsPred = &tempEndpoint; vsEdge = &tempEdge;
-                        value *= vt->eval(scene, vtPred, vs, ERadiance);
+						value *= vt->eval(scene, vtPred, vs, ERadiance, EArea, dist / emitter_radius);		// Edited
                         vt->measure = EArea;
                     } else {
                         if (vs->isDegenerate())
@@ -234,7 +252,8 @@ public:
                         if (value.isZero())
                             continue;
                         vt = &tempSample; vtPred = &tempEndpoint; vtEdge = &tempEdge;
-                        value *= vs->eval(scene, vsPred, vt, EImportance);
+						value *= vs->eval(scene, vsPred, vt, EImportance, EArea,		// Edited
+							distance_from_emitter / emitter_radius);
                         vs->measure = EArea;
                     }
 
@@ -244,9 +263,10 @@ public:
                     if (vs->isDegenerate() || vt->isDegenerate())
                         continue;
 
-                    value = importanceWeights[s] * radianceWeights[t] *
-                        vs->eval(scene, vsPred, vt, EImportance) *
-                        vt->eval(scene, vtPred, vs, ERadiance);
+					value = importanceWeights[s] * radianceWeights[t] *
+						vs->eval(scene, vsPred, vt, EImportance, EArea,			// Edited
+							distance_from_emitter / emitter_radius) *
+						vt->eval(scene, vtPred, vs, ERadiance, EArea, dist / emitter_radius);
 
                     /* Temporarily force vertex measure to EArea. Needed to
                        handle BSDFs with diffuse + specular components */

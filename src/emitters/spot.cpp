@@ -67,6 +67,7 @@ class SpotEmitter : public Emitter {
 public:
     SpotEmitter(const Properties &props) : Emitter(props) {
         m_intensity = props.getSpectrum("intensity", Spectrum(1.0f));
+		m_scale = props.getFloat("scale", 1.0f);		// Edited
         m_cutoffAngle = props.getFloat("cutoffAngle", 20);
         m_beamWidth = props.getFloat("beamWidth", m_cutoffAngle * 3.0f/4.0f);
         m_beamWidth = degToRad(m_beamWidth);
@@ -81,6 +82,7 @@ public:
         : Emitter(stream, manager) {
         m_texture = static_cast<Texture *>(manager->getInstance(stream));
         m_intensity = Spectrum(stream);
+		m_scale = stream->readFloat();		// Edited
         m_beamWidth = stream->readFloat();
         m_cutoffAngle = stream->readFloat();
         configure();
@@ -98,6 +100,7 @@ public:
 
         manager->serialize(stream, m_texture.get());
         m_intensity.serialize(stream);
+		stream->writeFloat(m_scale);		// Edited
         stream->writeFloat(m_beamWidth);
         stream->writeFloat(m_cutoffAngle);
     }
@@ -124,6 +127,11 @@ public:
                 * m_invTransitionWidth);
     }
 
+	Point samplePosition(const Point2 &sample) const {		// Edited
+		const auto petrub = m_radius * sample.y * Point2(sin(sample.x * 2 * M_PI), cos(sample.x * 2 * M_PI));
+		return { petrub.x, petrub.y, 0 };
+	}
+
     Spectrum samplePosition(PositionSamplingRecord &pRec, const Point2 &sample,
             const Point2 *extra) const {
         const Transform &trafo = m_worldTransform->eval(pRec.time);
@@ -131,11 +139,11 @@ public:
         pRec.n = Normal(0.0f);
         pRec.pdf = 1.0f;
         pRec.measure = EDiscrete;
-        return m_intensity * (4 * M_PI);
+		return m_intensity * (4 * M_PI) * m_scale;		// Edited
     }
 
     Spectrum evalPosition(const PositionSamplingRecord &pRec) const {
-        return (pRec.measure == EDiscrete) ? (m_intensity * 4*M_PI) : Spectrum(0.0f);
+		return (pRec.measure == EDiscrete) ? (m_intensity * 4 * M_PI * m_scale) : Spectrum(0.0f);		// Edited
     }
 
     Float pdfPosition(const PositionSamplingRecord &pRec) const {
@@ -175,10 +183,10 @@ public:
         Vector local = warp::squareToUniformCone(
             m_cosCutoffAngle, directionalSample);
         ray.setTime(time);
-        ray.setOrigin(trafo.transformAffine(Point(0.0f)));
+		ray.setOrigin(trafo.transformAffine(samplePosition(spatialSample)));		// Edited
         ray.setDirection(trafo(local));
         Float dirPdf = warp::squareToUniformConePdf(m_cosCutoffAngle);
-        return m_intensity * falloffCurve(local) / dirPdf;
+		return m_intensity * falloffCurve(local) / dirPdf * m_scale;		// Edited
     }
 
     Spectrum sampleDirect(DirectSamplingRecord &dRec, const Point2 &sample) const {
@@ -196,7 +204,7 @@ public:
         dRec.pdf = 1;
         dRec.measure = EDiscrete;
 
-        return m_intensity * falloffCurve(trafo.inverse()(-dRec.d)) * (invDist * invDist);
+		return m_intensity * falloffCurve(trafo.inverse()(-dRec.d)) * (invDist * invDist) * m_scale;		// Edited
     }
 
     Float pdfDirect(const DirectSamplingRecord &dRec) const {
@@ -232,7 +240,7 @@ public:
 private:
     Spectrum m_intensity;
     ref<Texture> m_texture;
-    Float m_beamWidth, m_cutoffAngle, m_uvFactor;
+	Float m_beamWidth, m_cutoffAngle, m_uvFactor, m_scale;		// Edited
     Float m_cosBeamWidth, m_cosCutoffAngle, m_invTransitionWidth;
 };
 

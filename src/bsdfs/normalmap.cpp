@@ -179,6 +179,7 @@ public:
         perturbedQuery.sampler = bRec.sampler;
         perturbedQuery.typeMask = bRec.typeMask;
         perturbedQuery.component = bRec.component;
+		perturbedQuery.normalized_distance_travelled_from_emitter = bRec.normalized_distance_travelled_from_emitter;		// Edited
 
         return m_nested->eval(perturbedQuery, measure);
     }
@@ -197,6 +198,7 @@ public:
         perturbedQuery.sampler = bRec.sampler;
         perturbedQuery.typeMask = bRec.typeMask;
         perturbedQuery.component = bRec.component;
+		perturbedQuery.normalized_distance_travelled_from_emitter = bRec.normalized_distance_travelled_from_emitter;		// Edited
         return m_nested->pdf(perturbedQuery, measure);
     }
 
@@ -210,6 +212,7 @@ public:
         perturbedQuery.sampler = bRec.sampler;
         perturbedQuery.typeMask = bRec.typeMask;
         perturbedQuery.component = bRec.component;
+		perturbedQuery.normalized_distance_travelled_from_emitter = bRec.normalized_distance_travelled_from_emitter;		// Edited
         Spectrum result = m_nested->sample(perturbedQuery, sample);
         if (!result.isZero()) {
             bRec.sampledComponent = perturbedQuery.sampledComponent;
@@ -231,6 +234,7 @@ public:
         perturbedQuery.wi = perturbed.toLocal(its.toWorld(bRec.wi));
         perturbedQuery.typeMask = bRec.typeMask;
         perturbedQuery.component = bRec.component;
+		perturbedQuery.normalized_distance_travelled_from_emitter = bRec.normalized_distance_travelled_from_emitter;		// Edited
         Spectrum result = m_nested->sample(perturbedQuery, pdf, sample);
 
         if (!result.isZero()) {

@@ -147,6 +147,7 @@ public:
                 weight = 1-weight;
             BSDFSamplingRecord bRec2(bRec);
             bRec2.component = m_indices[bRec.component].second;
+			bRec2.normalized_distance_travelled_from_emitter = bRec.normalized_distance_travelled_from_emitter;		// Edited
             return m_bsdfs[idx]->eval(bRec2, measure) * weight;
         }
     }
@@ -168,6 +169,7 @@ public:
                 weight = 1-weight;
             BSDFSamplingRecord bRec2(bRec);
             bRec2.component = m_indices[bRec.component].second;
+			bRec2.normalized_distance_travelled_from_emitter = bRec.normalized_distance_travelled_from_emitter;		// Edited
             return m_bsdfs[idx]->pdf(bRec2, measure) * weight;
         }
     }

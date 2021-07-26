@@ -147,6 +147,7 @@ std::pair<int, int> Path::alternatingRandomWalkFromPixel(const Scene *scene, Sam
         curVertexT = NULL;
     }
 
+	Float distance_from_emitter = 0, emitter_radius = 0;		// Edited
     Spectrum throughputS(1.0f), throughputT(1.0f);
 
     int s = 0;
@@ -176,14 +177,23 @@ std::pair<int, int> Path::alternatingRandomWalkFromPixel(const Scene *scene, Sam
             PathVertex *succVertexS = pool.allocVertex();
             PathEdge *succEdgeS = pool.allocEdge();
 
-            if (curVertexS->sampleNext(scene, sampler, predVertexS,
-                    predEdgeS, succEdgeS, succVertexS, EImportance,
-                    rrStart != -1 && s >= rrStart, &throughputS)) {
-                emitterPath.append(succEdgeS, succVertexS);
-                predVertexS = curVertexS;
-                curVertexS = succVertexS;
-                predEdgeS = succEdgeS;
-                s++;
+			BDAssert(s == 0 || emitter_radius > 0);		// Edited
+			if (curVertexS->sampleNext(scene, sampler, predVertexS,
+				predEdgeS, succEdgeS, succVertexS, EImportance,
+				rrStart != -1 && s >= rrStart, &throughputS,
+				s > 0 ? distance_from_emitter / emitter_radius : .0f)) {
+				emitterPath.append(succEdgeS, succVertexS);
+				predVertexS = curVertexS;
+				curVertexS = succVertexS;
+				predEdgeS = succEdgeS;
+				s++;
+				
+				if (s == 1) {		// Edited
+					BDAssert(curVertexS->type == PathVertex::EEmitterSample);
+					emitter_radius = static_cast<const Emitter*>(curVertexS->getPositionSamplingRecord().object)->getRadius();
+				}
+
+				curVertexS->pathCoherenceProperties(distance_from_emitter, emitter_radius);		// Edited
             } else {
                 pool.release(succVertexS);
                 pool.release(succEdgeS);
@@ -274,6 +284,14 @@ Float Path::miWeight(const Scene *scene, const Path &emitterSubpath,
             *vs = emitterSubpath.vertex(s),
             *vt = sensorSubpath.vertex(t);
 
+	Float emitter_radius = 0;		// Edited
+	Float distance_from_emitter = 0;
+	for (int ss = 0; ss <= s; ++ss)
+		emitterSubpath.vertex(ss)->pathCoherenceProperties(distance_from_emitter, emitter_radius);
+	Float dist_to_sensor_node = distance_from_emitter;
+	for (int tt = t; tt >= 0; --tt)
+		sensorSubpath.vertex(tt)->pathCoherenceProperties(dist_to_sensor_node, emitter_radius);
+
     /* pdfImp[i] and pdfRad[i] store the area/volume density of vertex
        'i' when sampled from the adjacent vertex in the emitter
        and sensor direction, respectively. */
@@ -354,12 +372,12 @@ Float Path::miWeight(const Scene *scene, const Path &emitterSubpath,
             pdfRad[pos++] = emitterSubpath.vertex(i+1)->pdf[ERadiance]
                 * emitterSubpath.edge(i)->pdf[ERadiance];
 
-        pdfRad[pos++] = vs->evalPdf(scene, vt, vsPred, ERadiance, vsMeasure)
-            * emitterSubpath.edge(s-1)->pdf[ERadiance];
+		pdfRad[pos++] = vs->evalPdf(scene, vt, vsPred, ERadiance, vsMeasure, distance_from_emitter / emitter_radius)		// Edited
+			* emitterSubpath.edge(s - 1)->pdf[ERadiance];
     }
 
-    pdfRad[pos++] = vt->evalPdf(scene, vtPred, vs, ERadiance, vtMeasure)
-        * connectionEdge->pdf[ERadiance];
+	pdfRad[pos++] = vt->evalPdf(scene, vtPred, vs, ERadiance, vtMeasure, dist_to_sensor_node / emitter_radius)		// Edited
+		* connectionEdge->pdf[ERadiance];
 
     for (int i=t; i>0; --i)
         pdfRad[pos++] = sensorSubpath.vertex(i-1)->pdf[ERadiance]

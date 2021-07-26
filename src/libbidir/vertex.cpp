@@ -35,7 +35,7 @@ void PathVertex::makeEndpoint(const Scene *scene, Float time, ETransportMode mod
 bool PathVertex::sampleNext(const Scene *scene, Sampler *sampler,
         const PathVertex *pred, const PathEdge *predEdge,
         PathEdge *succEdge, PathVertex *succ,
-        ETransportMode mode, bool russianRoulette, Spectrum *throughput) {
+		ETransportMode mode, bool russianRoulette, Spectrum *throughput, Float normalized_distance_from_emitter) {		// Edited
     Ray ray;
 
     memset(succEdge, 0, sizeof(PathEdge));
@@ -154,6 +154,7 @@ bool PathVertex::sampleNext(const Scene *scene, Sampler *sampler,
 
                 /* Sample the BSDF */
                 BSDFSamplingRecord bRec(its, sampler, mode);
+				bRec.normalized_distance_travelled_from_emitter = normalized_distance_from_emitter;		// Edited
                 bRec.wi = its.toLocal(wi);
                 weight[mode] = bsdf->sample(bRec, pdf[mode], sampler->next2D());
                 if (weight[mode].isZero())
@@ -176,12 +177,14 @@ bool PathVertex::sampleNext(const Scene *scene, Sampler *sampler,
                     const Medium *expected = its.getTargetMedium(wi);
                     if (expected != predEdge->medium) {
                         #if defined(MTS_BD_TRACE)
-                            SLog(EWarn, "Detected an inconsistency: approached "
-                                "surface %s within medium %s, but the surface "
-                                "states that the ray should have been in medium %s.",
-                                its.toString().c_str(), predEdge->medium ?
-                                predEdge->medium->toString().c_str() : "null",
-                                expected ? expected->toString().c_str() : "null");
+							SLog(EWarn, "Detected an inconsistency: approached "
+								"surface %s from the %s "
+								"within medium %s, but the surface "
+								"states that the ray should have been in medium %s.",
+								its.toString().c_str(),
+								Frame::cosTheta(bRec.wi) >= 0 ? "outside" : "inside",
+								predEdge->medium ? predEdge->medium->toString().c_str() : "null",
+								expected ? expected->toString().c_str() : "null");
                         #endif
                         ++mediumInconsistencies;
                         return false;
@@ -306,6 +309,27 @@ bool PathVertex::sampleNext(const Scene *scene, Sampler *sampler,
     }
 
     return true;
+}
+
+void PathVertex::pathCoherenceProperties(Float &dist, Float &radius) {		// Edited
+	const Intersection &its = getIntersection();
+	dist += std::max<Float>(0, its.t);
+
+	// Diffuse surfaces and media "reset" coherence
+	if (type == ESurfaceInteraction) {
+		const BSDF *bsdf = its.getBSDF();
+		if (!!(bsdf->getType() & BSDF::EDiffuse))
+			dist = 0;
+	}
+	if (type == EMediumInteraction)
+		dist = 0;
+	// Emitter sample
+	if (type == EEmitterSample) {
+		PositionSamplingRecord &pRec = getPositionSamplingRecord();
+		const Emitter *emitter = static_cast<const Emitter *>(pRec.object);
+		radius = emitter->getRadius();
+		dist = 0;
+	}
 }
 
 int PathVertex::sampleSensor(const Scene *scene, Sampler *sampler,
@@ -778,7 +802,8 @@ bool PathVertex::propagatePerturbation(const Scene *scene, const PathVertex *pre
 }
 
 Spectrum PathVertex::eval(const Scene *scene, const PathVertex *pred,
-        const PathVertex *succ, ETransportMode mode, EMeasure measure) const {
+		const PathVertex *succ, ETransportMode mode, EMeasure measure,
+		Float normalized_distance_from_emitter) const {		// Edited
     Spectrum result(0.0f);
     Vector wo(0.0f);
 
@@ -857,6 +882,7 @@ Spectrum PathVertex::eval(const Scene *scene, const PathVertex *pred,
 
                 BSDFSamplingRecord bRec(its, its.toLocal(wi),
                         its.toLocal(wo), mode);
+				bRec.normalized_distance_travelled_from_emitter = normalized_distance_from_emitter;		// Edited
 
                 if (measure == EArea)
                     measure = ESolidAngle;
@@ -912,7 +938,8 @@ Spectrum PathVertex::eval(const Scene *scene, const PathVertex *pred,
 }
 
 Float PathVertex::evalPdf(const Scene *scene, const PathVertex *pred,
-        const PathVertex *succ, ETransportMode mode, EMeasure measure) const {
+	const PathVertex *succ, ETransportMode mode, EMeasure measure,
+	Float normalized_distance_from_emitter) const {			// Edited
     Vector wo(0.0f);
     Float dist = 0.0f, result = 0.0f;
 
@@ -975,6 +1002,7 @@ Float PathVertex::evalPdf(const Scene *scene, const PathVertex *pred,
                 Vector wi = normalize(predP - its.p);
 
                 BSDFSamplingRecord bRec(its, its.toLocal(wi), its.toLocal(wo), mode);
+				bRec.normalized_distance_travelled_from_emitter = normalized_distance_from_emitter;		// Edited
                 result = bsdf->pdf(bRec, measure == EArea ? ESolidAngle : measure);
 
                 /* Prevent light leaks due to the use of shading normals */
